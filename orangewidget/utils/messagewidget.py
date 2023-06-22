@@ -58,6 +58,8 @@ class Severity(enum.IntEnum):
     Warning = 2  # == QMessageBox.Warning
     #: An error message severity.
     Error = 3  # == QMessageBox.Critical
+    #: A processing
+    Processing = 0
 
 
 class Message(
@@ -100,6 +102,7 @@ class Message(
     Warning = Severity.Warning
     #: Alias for :attr:`Severity.Error`
     Error = Severity.Error
+    Processing = Severity.Processing
 
     def __new__(cls, severity=Severity.Information, icon=QIcon(), text="",
                 informativeText="", detailedText="", textFormat=Qt.PlainText):
@@ -181,6 +184,7 @@ def standard_pixmap(severity):
         Severity.Information: QStyle.SP_MessageBoxInformation,
         Severity.Warning: QStyle.SP_MessageBoxWarning,
         Severity.Error: QStyle.SP_MessageBoxCritical,
+        Severity.Processing: QStyle.SP_MessageBoxInformation,
     }
     return mapping[severity]
 
