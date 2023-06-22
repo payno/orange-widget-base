@@ -326,6 +326,14 @@ class WidgetMessagesMixin(MessagesMixin):
         bar_background = "#ceceff"
         bar_icon = QStyle.SP_MessageBoxInformation
 
+    class Processing(MessageGroup):
+        """Base class for groups of processing messages in widgets"""
+        severity = 0
+        icon_path = None
+        bar_background = "#ceceff"
+        bar_icon = QStyle.SP_MessageBoxInformation
+
+
     def __init__(self):
         super().__init__()
         self.message_bar = None
@@ -401,3 +409,7 @@ class WidgetMessagesMixin(MessagesMixin):
     def error(self, text_or_id=None, text=None, shown=True):
         self._warn_obsolete(text_or_id, "error")
         self.Error._add_general(text_or_id, text, shown)
+
+    def processing_info(self, text_or_id=None, text=None, shown=True):
+        self._warn_obsolete(text_or_id, "processing")
+        self.Processing._add_general(text_or_id, text, shown)
