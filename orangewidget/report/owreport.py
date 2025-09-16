@@ -4,15 +4,15 @@ import logging
 import traceback
 import warnings
 import pickle
+import pkgutil
 from collections import OrderedDict
 from enum import IntEnum
 
 from typing import Optional
 
-import pkg_resources
-
 from AnyQt.QtCore import Qt, QObject, pyqtSlot, QSize
-from AnyQt.QtGui import QIcon, QCursor, QStandardItemModel, QStandardItem
+from AnyQt.QtGui import (
+    QIcon, QCursor, QStandardItemModel, QStandardItem, QPageSize)
 from AnyQt.QtWidgets import (
     QApplication, QDialog, QFileDialog, QTableView, QHeaderView,
     QMessageBox)
@@ -20,6 +20,7 @@ from AnyQt.QtPrintSupport import QPrinter, QPrintDialog
 
 
 from orangewidget import gui
+from orangewidget.utils import load_styled_icon
 from orangewidget.widget import OWBaseWidget
 from orangewidget.settings import Setting
 
@@ -51,12 +52,9 @@ class ReportItem(QStandardItem):
         self.icon_name = icon_name
         self.comment = comment
         try:
-            path = pkg_resources.resource_filename(module, icon_name)
-        except ImportError:
-            path = ""
-        except ValueError:
-            path = ""
-        icon = QIcon(path)
+            icon = load_styled_icon(module, icon_name)
+        except (ImportError, FileNotFoundError):
+            icon = QIcon()
         self.id = id(icon)
         super().__init__(icon, name)
 
@@ -93,10 +91,8 @@ class ReportItemModel(QStandardItemModel):
 class ReportTable(QTableView):
     def __init__(self, parent):
         super().__init__(parent)
-        self._icon_remove = QIcon(pkg_resources.resource_filename(
-            __name__, "icons/delete.svg"))
-        self._icon_scheme = QIcon(pkg_resources.resource_filename(
-            __name__, "icons/scheme.svg"))
+        self._icon_remove = load_styled_icon(__package__, "icons/delete.svg")
+        self._icon_scheme = load_styled_icon(__package__, "icons/scheme.svg")
 
     def mouseMoveEvent(self, event):
         self._clear_icons()
@@ -139,9 +135,8 @@ class OWReport(OWBaseWidget):
         self.report_changed = False
         self.have_report_warning_shown = False
 
-        index_file = pkg_resources.resource_filename(__name__, "index.html")
-        with open(index_file, "r") as f:
-            self.report_html_template = f.read()
+        index_file = pkgutil.get_data(__name__, "index.html")
+        self.report_html_template = index_file.decode("utf-8")
 
     def _setup_ui_(self):
         self.table_model = ReportItemModel(0, len(Column.__members__))
@@ -360,7 +355,7 @@ class OWReport(OWBaseWidget):
         _, extension = os.path.splitext(filename)
         if extension == ".pdf":
             printer = QPrinter()
-            printer.setPageSize(QPrinter.A4)
+            printer.setPageSize(QPageSize(QPageSize.A4))
             printer.setOutputFormat(QPrinter.PdfFormat)
             printer.setOutputFileName(filename)
             self._print_to_printer(printer)

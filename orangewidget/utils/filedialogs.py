@@ -1,3 +1,8 @@
+from collections import Counter
+from itertools import count
+
+import re
+
 import os
 import sys
 import typing
@@ -62,6 +67,30 @@ def fix_extension(ext, format, suggested_ext, suggested_format):
 fix_extension.CHANGE_EXT = 0      # type: ignore
 fix_extension.CHANGE_FORMAT = 1   # type: ignore
 fix_extension.CANCEL = 2          # type: ignore
+
+
+def unambiguous_paths(fullpaths, minlevel=1):
+    assert minlevel > 0
+
+    # split paths using str.split(..., os.path.sep);
+    # os.path.split only splits into head and tail
+    sep = re.escape(os.path.sep)
+    if os.path.altsep is not None:
+        sep = f"{sep}|{re.escape(os.path.altsep)}"
+    splitpaths = [re.split(sep, path) for path in fullpaths]
+
+    to_check = list(range(len(fullpaths)))
+    paths = [os.path.join(*path[-minlevel:]) for path in splitpaths]
+    level = minlevel
+
+    while to_check:
+        counts = Counter(paths[i] for i in to_check)
+        to_check = [i for i in to_check if counts[paths[i]] > 1
+                    and len(splitpaths[i]) > level]
+        level += 1
+        for i in to_check:
+            paths[i] = os.path.join(splitpaths[i][-level], paths[i])
+    return paths
 
 
 def format_filter(writer):
@@ -133,7 +162,8 @@ def open_filename_dialog(start_dir: str, start_filter: str, file_formats,
         start_dir (str): initial directory, optionally including the filename
         start_filter (str): initial filter
         file_formats (a list of FileFormat): file formats
-        add_all (bool): add a filter for all supported extensions
+        add_all (False, True, or `"*"`; default True): add a filter for all supported extensions.
+           If set to `"*"`, show an option to read all files, *.*.
         title (str): title of the dialog
         dialog: a function that creates a QT dialog
     Returns:
@@ -143,7 +173,10 @@ def open_filename_dialog(start_dir: str, start_filter: str, file_formats,
     filters = [format_filter(f) for f in file_formats]
 
     # add all readable files option
-    if add_all:
+    if add_all == "*":
+        file_formats.insert(0, None)
+        filters.insert(0, "All files (*.*)")
+    elif add_all and len(file_formats) > 1:
         all_extensions = set()
         for f in file_formats:
             all_extensions.update(f.EXTENSIONS)
@@ -422,9 +455,13 @@ class RecentPathsWComboMixin(RecentPathsWidgetMixin):
         if not self.recent_paths:
             self.file_combo.addItem("(none)")
             self.file_combo.model().item(0).setEnabled(False)
+            self.file_combo.setToolTip("")
         else:
-            for i, recent in enumerate(self.recent_paths):
-                self.file_combo.addItem(recent.basename)
+            self.file_combo.setToolTip(self.recent_paths[0].abspath)
+            paths = unambiguous_paths(
+                [recent.abspath for recent in self.recent_paths], minlevel=2)
+            for i, recent, path in zip(count(), self.recent_paths, paths):
+                self.file_combo.addItem(path)
                 self.file_combo.model().item(i).setToolTip(recent.abspath)
                 if not os.path.exists(recent.abspath):
                     self.file_combo.setItemData(i, QBrush(Qt.red),

@@ -3,9 +3,10 @@
 import os
 import subprocess
 from setuptools import setup, find_packages, Command
+from setuptools.command.install import install
 
 NAME = 'orange-widget-base'
-VERSION = '4.24.0'
+VERSION = '4.26.0'
 ISRELEASED = True
 # full version identifier including a git revision identifier for development
 # build/releases (this is filled/updated in `write_version_py`)
@@ -57,8 +58,8 @@ INSTALL_REQUIRES = [
     "pyqtgraph",
     "AnyQt>=0.1.0",
     "typing_extensions>=3.7.4.3",
-    "orange-canvas-core>=0.1.30,<0.2a",
-    'appnope; sys_platform=="darwin"'
+    "orange-canvas-core>=0.2a.dev0,<0.3a",
+    'appnope; sys_platform=="darwin"',
 ]
 
 EXTRAS_REQUIRE = {
@@ -68,6 +69,21 @@ ENTRY_POINTS = {
 }
 
 DATA_FILES = []
+
+
+class InstallMultilingualCommand(install):
+    def run(self):
+        super().run()
+        self.compile_to_multilingual()
+
+    def compile_to_multilingual(self):
+        from trubar import translate
+
+        package_dir = os.path.dirname(os.path.abspath(__file__))
+        translate(
+            "msgs.jaml",
+            source_dir=os.path.join(self.install_lib, "orangewidget"),
+            config_file=os.path.join(package_dir, "i18n", "trubar-config.yaml"))
 
 
 # Return the git revision as a string
@@ -118,8 +134,12 @@ if not release:
         GIT_REVISION = git_version()
     elif os.path.exists(filename):
         # must be a source distribution, use existing version file
-        import imp
-        version = imp.load_source("orangewidget.version", filename)
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "orangewidget.version", filename
+        )
+        version = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(version)
         GIT_REVISION = version.git_revision
     else:
         GIT_REVISION = "Unknown"
@@ -167,9 +187,12 @@ def setup_package():
         package_data=PACKAGE_DATA,
         data_files=DATA_FILES,
         install_requires=INSTALL_REQUIRES,
+        cmdclass={
+            'install': InstallMultilingualCommand,
+        },
         extras_require=EXTRAS_REQUIRE,
         entry_points=ENTRY_POINTS,
-        python_requires=">=3.6",
+        python_requires=">=3.10",
         zip_safe=False,
     )
 

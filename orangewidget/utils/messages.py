@@ -36,7 +36,6 @@ from typing import Optional
 
 from AnyQt.QtWidgets import QStyle, QSizePolicy
 
-from orangewidget import gui
 from orangewidget.utils.messagewidget import MessagesWidget
 
 
@@ -51,8 +50,8 @@ class UnboundMsg(str):
     def __new__(cls, msg):
         return str.__new__(cls, msg)
 
-    def bind(self, group):
-        return _BoundMsg(self, group)
+    def bind(self, group, owner_class=None):
+        return _BoundMsg(self, group, owner_class)
 
     # The method is implemented in _BoundMsg
     # pylint: disable=unused-variable
@@ -105,12 +104,14 @@ class _BoundMsg(UnboundMsg):
 
     Attributes:
         group (MessageGroup): the group to which this message belongs
+        owner_class (OWBaseWidget): the class in which the message is defined
         formatted (str): formatted message
 
     """
-    def __new__(cls, unbound_msg, group):
+    def __new__(cls, unbound_msg, group, owner_class=None):
         self = UnboundMsg.__new__(cls, unbound_msg)
         self.group = group
+        self.owner_class = owner_class
         self.formatted = ""
         self.tb = None  # type: Optional[str]
         return self
@@ -185,12 +186,29 @@ class MessageGroup:
         return self._active.values()
 
     def _bind_messages(self):
-        # type(self).__dict__ wouldn't return inherited messages, hence dir
-        for name in dir(self):
-            msg = getattr(self, name)
-            if isinstance(msg, UnboundMsg):
-                msg = msg.bind(self)
-                self.__dict__[name] = msg
+        def bind_subgroup(subgroup, widget_class):
+            for name, msg in subgroup.__dict__.items():
+                if type(msg) is UnboundMsg:
+                    msg = msg.bind(self, widget_class)
+                    self.__dict__[name] = msg
+
+        # Iterate through all base classes of this message group.
+        # Among the widgets in mro, find the one that defined this class
+        # and bind all messages in the group to that class.
+        # This is needed so that each message has its "owner" and that `clear`
+        # method can clear only messages from the owner (see method `clear`)
+        for group in type(self).mro():
+            for widget_class in type(self.widget).mro():
+                if widget_class.__dict__.get(group.__name__) is group:
+                    break
+            else:
+                # MessageGroups outside widget classes (e.g. mixins)
+                widget_class = None
+            bind_subgroup(group, widget_class)
+
+        # This binds `_general` -- and any similar cases in which a message is
+        # added to the instance and not as class attribute
+        bind_subgroup(self, None)
 
     def add_message(self, name, msg="{}"):
         """Add and bind message to a group that is already instantiated
@@ -252,10 +270,11 @@ class MessageGroup:
 
     # self has default value to avoid PyCharm warnings when calling
     # self.Error.clear(): PyCharm doesn't know that Error is instantiated
-    def clear(self=None):
+    def clear(self=None, *, owner=None):
         """Deactivate all active message from this group."""
         for msg in list(self._active):
-            self.deactivate_msg(msg)
+            if owner is None or msg.owner_class is owner:
+                self.deactivate_msg(msg)
 
     def _add_general(self, id_or_text, text, shown):
         """Handler for methods `error`, `warning` and `information`;
@@ -308,21 +327,18 @@ class WidgetMessagesMixin(MessagesMixin):
     class Error(MessageGroup):
         """Base class for groups of error messages in widgets"""
         severity = 3
-        icon_path = gui.resource_filename("icons/error.png")
         bar_background = "#ffc6c6"
         bar_icon = QStyle.SP_MessageBoxCritical
 
     class Warning(MessageGroup):
         """Base class for groups of warning messages in widgets"""
         severity = 2
-        icon_path = gui.resource_filename("icons/warning.png")
         bar_background = "#ffffc9"
         bar_icon = QStyle.SP_MessageBoxWarning
 
     class Information(MessageGroup):
         """Base class for groups of information messages in widgets"""
         severity = 1
-        icon_path = gui.resource_filename("icons/information.png")
         bar_background = "#ceceff"
         bar_icon = QStyle.SP_MessageBoxInformation
 

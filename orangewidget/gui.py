@@ -11,8 +11,6 @@ import logging
 from types import LambdaType
 from collections import defaultdict
 
-import pkg_resources
-
 from AnyQt import QtWidgets, QtCore, QtGui
 from AnyQt.QtCore import Qt, QEvent, QObject, QTimer, pyqtSignal as Signal
 from AnyQt.QtGui import QCursor, QColor
@@ -29,6 +27,9 @@ from orangewidget.utils.combobox import (
 )
 from orangewidget.utils.itemdelegates import text_color_for_state
 from orangewidget.utils.itemmodels import PyListModel, signal_blocking
+
+
+from importlib.resources import files as _resources_files
 
 __re_label = re.compile(r"(^|[^%])%\((?P<value>[a-zA-Z]\w*)\)")
 
@@ -102,11 +103,14 @@ class TableView(QTableView):
             return super().sizeHint(option, index)
 
 
-def resource_filename(path):
+def resource_filename(path: str) -> str:  # pragma: no cover
     """
     Return a resource filename (package data) for path.
     """
-    return pkg_resources.resource_filename(__name__, path)
+    warnings.warn(
+        "'resource_filename' is deprecated.", DeprecationWarning, stacklevel=2
+    )
+    return str(_resources_files(__package__).joinpath(path))
 
 
 class OWComponent:
@@ -766,7 +770,7 @@ def spin(widget, master, value, minv, maxv, step=1, box=None, label=None,
     else:
         b = widget
         hasHBox = False
-    if not hasHBox and (checked or callback or posttext):
+    if not hasHBox and (checked or posttext):
         bi = hBox(b, addToLayout=False)
     else:
         bi = b
